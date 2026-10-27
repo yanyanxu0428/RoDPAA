@@ -11,7 +11,7 @@
 #' @param var_thresh Proportion of variance for `method = "variance"`.
 #' @param tol Eigenvalues at or below `tol` are treated as zero.
 #' @param cap_centered_n Optional upper bound on the rank, for example
-#'   \eqn{n - 1} for a double-centred matrix.
+#'   \eqn{n - 1} for a double-centered matrix.
 #' @param min_rank Lower bound on the returned rank.
 #' @return An integer rank.
 #' @keywords internal

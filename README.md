@@ -68,7 +68,7 @@ The first two components lie far above what is expected when participants
 are randomly mismatched between the views (grey band), so they are shared.
 
 Two more plots are available: `plot(fit, type = "scores")` shows each
-participant's scores on two shared factors (add `group = ` to colour them,
+participant's scores on two shared factors (add `group = ` to color them,
 for example by diagnosis), and `plot(fit, type = "pvalue")` shows the
 permutation P-values. See `?plot.rodpaa`.
 

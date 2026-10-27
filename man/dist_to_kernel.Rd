@@ -39,6 +39,8 @@ eigenvalues to zero, retaining the positive spectral component
 used to estimate the signal subspace. Consequently, the
 resulting kernel may differ from the original double-centered
 matrix.
+
+This is the same transformation as \code{MiRKAT::D2K()}.
 }
 \examples{
 # Euclidean dissimilarity

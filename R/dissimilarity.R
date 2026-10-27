@@ -25,7 +25,7 @@ as_data_matrix <- function(x, name) {
   # a square, symmetric, zero-diagonal matrix may still be valid data, so only warn
   if (looks_like_dissimilarity(x)) {
     warning("`", name, "` looks like a dissimilarity matrix (square, symmetric, zero diagonal). ",
-            "It is analysed as a data matrix, as requested by `input = \"data\"`. ",
+            "It is analyzed as a data matrix, as requested by `input = \"data\"`. ",
             "If it is a dissimilarity matrix, use `input = \"dissimilarity\"`.", call. = FALSE)
   }
   x

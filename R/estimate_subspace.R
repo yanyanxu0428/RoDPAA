@@ -1,11 +1,11 @@
 #' Estimate the signal subspace of one view (Step 2)
 #'
-#' Eigendecomposes the centred similarity matrix \eqn{K_v}, chooses the signal
+#' Eigendecomposes the centered similarity matrix \eqn{K_v}, chooses the signal
 #' rank \eqn{\hat{r}_v} (unless supplied) and keeps the leading \eqn{\hat{r}_v}
 #' eigenvectors as the signal subspace \eqn{\hat{O}_v}. The remaining
 #' eigenvectors form the noise part.
 #'
-#' @param K Centred \eqn{n \times n} similarity matrix of one view.
+#' @param K Centered \eqn{n \times n} similarity matrix of one view.
 #' @param r Optional signal rank. If `NULL`, chosen by `select_signal_rank()`.
 #' @param rank_method,var_thresh Passed to `select_signal_rank()`.
 #' @return A list with the signal rank `r`, the signal basis `O` (\eqn{n \times

@@ -23,6 +23,8 @@
 #' resulting kernel may differ from the original double-centered
 #' matrix.
 #'
+#' This is the same transformation as `MiRKAT::D2K()`.
+#'
 #' @param D A symmetric, nonnegative \eqn{n \times n}
 #'   dissimilarity matrix with zero diagonal, or a `dist` object.
 #'   Rows and columns must represent the same samples in the
@@ -47,7 +49,7 @@ dist_to_kernel <- function(D) {
   D <- as.matrix(D)
   if (nrow(D) != ncol(D)) stop("`D` must be a square dissimilarity matrix.")
   n <- nrow(D)
-  C <- diag(n) - 1 / n           # centring matrix C = I_n - (1/n) 1 1^T
+  C <- diag(n) - 1 / n           # centering matrix C = I_n - (1/n) 1 1^T
   D2 <- D * D                    # D^(2): element-wise squared dissimilarities
   K <- -0.5 * C %*% D2 %*% C     # K = -1/2 C D^(2) C
   # set negative eigenvalues of K to zero (positive semi-definite)
@@ -84,17 +86,4 @@ center_kernel <- function(K, name = "K") {
   KC <- C %*% K %*% C
   dimnames(KC) <- dimnames(K)
   KC
-}
-
-#' Linear kernel of a data matrix
-#'
-#' @param X An \eqn{n \times p} data matrix (participants in rows).
-#' @return The double-centred linear kernel \eqn{C X X^\top C}, with the
-#'   centring matrix \eqn{C = I_n - \frac{1}{n} 1 1^\top}. It equals
-#'   `dist_to_kernel(dist(X))`, so with this kernel RoDPAA uses Euclidean
-#'   geometry.
-#' @keywords internal
-#' @noRd
-linear_kernel <- function(X) {
-  center_kernel(X %*% t(X))
 }

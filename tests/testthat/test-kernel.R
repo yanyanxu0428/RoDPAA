@@ -1,4 +1,4 @@
-test_that("dist_to_kernel gives a centred, symmetric, PSD matrix", {
+test_that("dist_to_kernel gives a centered, symmetric, PSD matrix", {
   set.seed(1)
   X <- matrix(rnorm(20 * 5), 20, 5)
   K <- dist_to_kernel(dist(X))
@@ -8,10 +8,11 @@ test_that("dist_to_kernel gives a centred, symmetric, PSD matrix", {
   expect_true(min(eigen(K, symmetric = TRUE, only.values = TRUE)$values) > -1e-8)
 })
 
-test_that("for Euclidean distances the kernel equals the centred linear kernel", {
+test_that("for Euclidean distances the kernel equals the centered linear kernel", {
   set.seed(2)
   X <- matrix(rnorm(15 * 4), 15, 4)
-  expect_equal(dist_to_kernel(dist(X)), linear_kernel(X), tolerance = 1e-8,
+  C <- diag(15) - 1 / 15                     # centering matrix
+  expect_equal(dist_to_kernel(dist(X)), C %*% X %*% t(X) %*% C, tolerance = 1e-8,
                ignore_attr = TRUE)
 })
 

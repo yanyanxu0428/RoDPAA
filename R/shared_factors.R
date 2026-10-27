@@ -9,7 +9,7 @@
 #'
 #' @param S1,S2 Signal subspaces from `estimate_signal_subspace()`.
 #' @param angles Output of `principal_angles()`.
-#' @param K1,K2 The two centred similarity matrices (for the reconstructions).
+#' @param K1,K2 The two centered similarity matrices (for the reconstructions).
 #' @param k Number of shared directions to construct.
 #' @return A list with the shared directions `O_J1`, `O_J2`, the shared factors
 #'   `O_J`, the view-specific directions `O_I1`, `O_I2`, their eigenvalue
