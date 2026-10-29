@@ -17,10 +17,11 @@
 #' after the first non-significant one are not counted in \eqn{\hat{k}} even
 #' if their P-value is below the significance level, and are drawn in grey.
 #'
-#' An empirical P-value of 0 means that no permutation reached the observed
-#' value, that is \eqn{P < 1/B} for \eqn{B} permutations. Because 0 cannot be
-#' shown on a log scale, such P-values are drawn at \eqn{1/B} with a triangle.
-#' The P-values stored in the fit are not changed.
+#' The permutation P-value of component \eqn{j} is the proportion of the
+#' \eqn{B} permutations whose \eqn{j}th shared intensity is at least the
+#' observed one. Because a P-value of 0 cannot be shown on a log scale, it is
+#' drawn at \eqn{1/B} with a triangle, for display only. The P-values stored in
+#' the fit are not changed.
 #'
 #' Colors follow the color-blind-safe Okabe-Ito palette. The title and axis
 #' labels can be replaced with `main`, `xlab` and `ylab`.
@@ -46,10 +47,6 @@
 #' plot(fit)                                  # shared intensities
 #' plot(fit, type = "scores")                 # SF1 vs SF2
 #' plot(fit, type = "pvalue")                 # permutation P-values
-#'
-#' # color the scores by a participant-level label
-#' grp <- ifelse(rodpaa_example$shared[, 1] > 0, "high Z1", "low Z1")
-#' plot(fit, type = "scores", group = grp)
 plot.rodpaa <- function(x, type = c("intensity", "scores", "pvalue"),
                         n_show = NULL, factors = c(1, 2), group = NULL,
                         col = "#0072B2", ...) {
@@ -94,16 +91,16 @@ plot_frame <- function(x, y, defaults, ...) {
   do.call(graphics::plot, args, quote = TRUE)   # quote: keep plotmath labels unevaluated
 }
 
-# Legend in the strip above the data: one evenly spaced row for up to three
-# entries, otherwise two columns
+# Legend in the strip above the data: one row when it fits within the plot,
+# otherwise two columns
 top_legend <- function(labels, ...) {
-  if (length(labels) <= 3) {
-    graphics::legend("top", legend = labels, horiz = TRUE, bty = "n", cex = 0.85,
-                     x.intersp = 0.5, seg.len = 1.2,
-                     text.width = max(graphics::strwidth(labels, cex = 0.85)), ...)
+  args <- list(x = "top", legend = labels, bty = "n", cex = 0.85,
+               x.intersp = 0.5, seg.len = 1.2, ...)
+  one_row <- do.call(graphics::legend, c(args, horiz = TRUE, plot = FALSE), quote = TRUE)
+  if (one_row$rect$w <= diff(graphics::par("usr")[1:2])) {
+    do.call(graphics::legend, c(args, horiz = TRUE), quote = TRUE)
   } else {
-    graphics::legend("top", legend = labels, ncol = 2, bty = "n", cex = 0.85,
-                     x.intersp = 0.5, seg.len = 1.2, ...)
+    do.call(graphics::legend, c(args, ncol = 2), quote = TRUE)
   }
 }
 
@@ -118,8 +115,8 @@ plot_intensity <- function(x, idx, in_k, col, ...) {
 
   # y-axis runs to 1 (cosines); the strip above 1 holds the legend, clear of the data
   plot_frame(idx, s[idx], list(
-    ylim = c(0, 1.17), xaxt = "n", yaxt = "n",
-    xlab = "Component",
+    ylim = c(0, 1.24), xaxt = "n", yaxt = "n",
+    xlab = "Principal-angle component",
     ylab = expression("Shared intensity (cos " * theta * ")"),
     main = bquote("Shared dimension " * hat(k) == .(k_hat))), ...)
   graphics::axis(1, at = idx, tcl = -0.3, mgp = c(2.4, 0.6, 0))
@@ -165,7 +162,7 @@ plot_pvalue <- function(x, idx, in_k, col, ...) {
   adjusted <- !identical(perm$correction_method, "none")
   p <- perm$table$p_adj[idx]
 
-  # plotting only: P = 0 means P < 1/B, drawn at 1/B with a triangle
+  # plotting only: P = 0 is drawn at 1/B with a triangle
   is_zero <- p == 0
   y <- -log10(ifelse(is_zero, 1 / B, p))
   y_alpha <- -log10(perm$alpha)
@@ -173,7 +170,7 @@ plot_pvalue <- function(x, idx, in_k, col, ...) {
 
   plot_frame(idx, y, list(
     ylim = c(0, y_top * 1.4), xaxt = "n",        # headroom for the legend
-    xlab = "Component",
+    xlab = "Principal-angle component",
     ylab = if (adjusted) expression(-log[10] * "(adjusted " * italic(P) * ")") else expression(-log[10] * italic(P)),
     main = paste0("Permutation test (", method_label(perm$correction_method), ", B = ", B, ")")), ...)
   graphics::axis(1, at = idx, tcl = -0.3, mgp = c(2.4, 0.6, 0))
@@ -230,9 +227,12 @@ plot_scores <- function(x, factors, group, col, ...) {
   }
 
   # directions beyond k_hat are exploratory, not significant
-  lab <- function(j) paste0("SF", j, if (j > x$k_hat) " (exploratory, not significant)")
+  lab <- function(j) paste0("Shared factor ", j, if (j > x$k_hat) " (exploratory)")
   xs <- sf[, factors[1]]; ys <- sf[, factors[2]]
-  plot_frame(xs, ys, list(xlab = lab(factors[1]), ylab = lab(factors[2]),
+  # with a group legend, leave headroom above the points so the legend does not cover them
+  ylim <- range(ys)
+  if (!is.null(group)) ylim[2] <- ylim[2] + 0.25 * diff(ylim)
+  plot_frame(xs, ys, list(xlab = lab(factors[1]), ylab = lab(factors[2]), ylim = ylim,
                           main = "Shared-factor scores"), ...)
   graphics::abline(h = 0, v = 0, lty = 3, col = "grey75")
   graphics::points(xs, ys, pch = 21, cex = 1, col = "white", lwd = 0.5,

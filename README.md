@@ -1,12 +1,12 @@
-
 # RoDPAA
+
+## Introduction
+
 RoDPAA (Robust Dissimilarity-based Principal Angle Analysis) is an R package for unsupervised integration of high-dimensional multiview data. It identifies shared sample-level variation across two paired data views through principal-angle analysis of signal subspaces derived from sample dissimilarity matrices.
 
 Unlike methods that require shared variation to occupy an identical subspace across views, RoDPAA allows corresponding latent directions to be partially aligned, recognizing that different data modalities may capture complementary aspects of the same underlying biological processes. By quantifying the strength of cross-view alignment and using permutation-based inference to identify statistically significant shared components, RoDPAA can recover coordinated variation that may be overlooked under an exact common-subspace assumption.
 
 By operating on sample-level dissimilarities rather than the original feature matrices, RoDPAA accommodates user-specified dissimilarity measures, including Euclidean and non-Euclidean measures, and allows each data view to retain a geometry appropriate to its characteristics. This flexibility makes RoDPAA applicable to heterogeneous multiview data, including but not limited to microbiome, metabolomic, transcriptomic, and other high-dimensional biomedical measurements.
-
-
 
 ## Installation
 
@@ -14,116 +14,103 @@ Install the development version from GitHub:
 
 ``` r
 # install.packages("remotes")
-remotes::install_github("yanyanxu0428/RoDPAA")
+remotes::install_github("yanyanxu0428/RoDPAA", build_vignettes = TRUE)
 ```
 
-## Quick start
+## Usage
 
-RoDPAA needs one dissimilarity matrix per view, computed on the same
-participants in the same order. The package includes a small simulated
-example: two views measured on 80 participants that share two latent
-factors.
+### Example 1: Simulated data
+
+`rodpaa_example` contains two simulated views measured on the same 80
+participants, generated with two shared latent factors (see
+`?rodpaa_example`). RoDPAA takes one dissimilarity matrix per view. The signal
+ranks are selected with the default variance rule.
 
 ``` r
 library(RoDPAA)
 
-# 1. one dissimilarity matrix per view
-D1 <- dist(rodpaa_example$view1)   # Euclidean dissimilarity, view 1
-D2 <- dist(rodpaa_example$view2)   # Euclidean dissimilarity, view 2
+D1 <- dist(rodpaa_example$view1)   # Euclidean distance, view 1
+D2 <- dist(rodpaa_example$view2)   # Euclidean distance, view 2
 
-# 2. run RoDPAA (the permutation test is random, so set a seed)
-set.seed(1)
-fit <- rodpaa(D1, D2, input = "dissimilarity")
-#> Permutation test selected k = 2
+set.seed(1)                        # the permutation test is random
+fit <- rodpaa(D1, D2, input = "dissimilarity", rank_method = "variance")
+#> Shared dimension selected by the permutation test: k = 2
 fit
 #> RoDPAA fit
-#>   participants:             80
-#>   signal ranks (r1, r2):    3 , 3
-#>   shared dimension (k_hat): 2
-#>   leading shared intensities: 0.978, 0.967, 0.081
+#>   Participants:          80
+#>   Signal ranks:          r1 = 3, r2 = 3
+#>   Shared dimension:      k = 2 (permutation test)
+#>   Shared intensities:    0.978, 0.967, 0.081
+
+names(fit)                         # components of the fit
+summary(fit)                       # permutation test for each component
+plot(fit)                          # shared intensities
+head(fit$shared_factors)           # one score per participant
 ```
 
-RoDPAA kept three signal directions in each view and found that two of them
-are shared. The shared intensities are the cosines of the principal angles
-between the two views: values near 1 mean the views vary together across
-participants.
+<img src="man/figures/README-plot.png" width="60%" />
+
+The shared intensities are the cosines of the principal angles between the two
+signal subspaces. 
+
+
+### Example 2: Real data, ileal and rectal microbiome (IBDMDB)
+
+`ibdmdb_micro` contains genus-level 16S rRNA gene counts from paired ileal and
+rectal biopsies of 68 participants of the IBDMDB cohort (Lloyd-Price et al.,
+2019). Each view can use its own dissimilarity. Here, Bray-Curtis dissimilarity
+on the counts is used alongside Euclidean distance after the centered
+log-ratio (CLR) transformation.
 
 ``` r
-# 3. the permutation test behind k_hat
-summary(fit)
-#> ... (the fit overview above, then)
-#> Permutation test (bonferroni correction, alpha = 0.05):
-#>  component singular_value p_value p_adj significant
-#>          1      0.9779480   0.000 0.000        TRUE
-#>          2      0.9670978   0.000 0.000        TRUE
-#>          3      0.0809016   0.163 0.489       FALSE
+d <- ibdmdb_micro
 
-# 4. see it
-plot(fit)
+# Bray-Curtis dissimilarity on the counts
+set.seed(1)
+fit_bc <- rodpaa(d$rectum, d$ileum, input = "data",
+                 dissimilarity1 = "bray", dissimilarity2 = "bray")
+#> Shared dimension selected by the permutation test: k = 11
+
+# CLR transformation, then Euclidean distance
+clr <- function(X) { L <- log(X + 1); L - rowMeans(L) }
+set.seed(1)
+fit_eu <- rodpaa(clr(d$rectum), clr(d$ileum), input = "data",
+                 dissimilarity1 = "euclidean", dissimilarity2 = "euclidean")
+#> Shared dimension selected by the permutation test: k = 19
+
+plot(fit_bc)                       # shared intensities
+plot(fit_bc, type = "scores")      # participant scores on SF1 and SF2
 ```
 
-<img src="man/figures/README-plot.png" width="70%" />
+The two sites share 11 directions under Bray-Curtis dissimilarity and 19 under
+CLR-Euclidean distance, with the signal ranks selected by the default variance
+rule (80% of the eigenvalue sum).
 
-The first two components lie far above what is expected when participants
-are randomly mismatched between the views (grey band), so they are shared.
+### Example 3: Other input types
 
-Two more plots are available: `plot(fit, type = "scores")` shows each
-participant's scores on two shared factors (add `group = ` to color them,
-for example by diagnosis), and `plot(fit, type = "pvalue")` shows the
-permutation P-values. See `?plot.rodpaa`.
+`rodpaa()` accepts each view in one of three forms:
 
 ``` r
-# 5. the shared factors: one score per participant, for downstream analysis
-round(head(fit$shared_factors, 3), 3)
-#>        SF1    SF2
-#> P01 -0.114 -0.105
-#> P02  0.120  0.128
-#> P03 -0.123 -0.055
+rodpaa(D1, D2, input = "dissimilarity")      # dissimilarity matrices (default)
+rodpaa(X1, X2, input = "data",               # data matrices, participants in rows
+       dissimilarity1 = "bray", dissimilarity2 = "euclidean")
+rodpaa(K1, K2, input = "kernel")             # similarity (kernel) matrices
 ```
 
-## Choosing a dissimilarity
+With `input = "data"`, RoDPAA computes the dissimilarities internally, and
+`dissimilarity1` and `dissimilarity2` select Euclidean distance (`"euclidean"`)
+or Bray-Curtis dissimilarity (`"bray"`) for each view. For any other
+data-appropriate dissimilarity, compute the dissimilarity matrices first and
+supply them directly with `input = "dissimilarity"`. RoDPAA uses the data
+exactly as supplied, so apply any preprocessing first.
 
-Each view can use its own dissimilarity, for example Bray-Curtis for
-microbiome relative abundances and Euclidean distance for log-transformed
-metabolite levels. Any dissimilarity can be used, including UniFrac or
-Aitchison distance:
+## Learn more
+  
+* Tutorial: `vignette("Getting-started-with-RoDPAA", package = "RoDPAA")`
+* Function reference: `?rodpaa`, `?plot.rodpaa`, `?dist_to_kernel`
 
-``` r
-D1 <- vegan::vegdist(microbiome, method = "bray")
-D2 <- dist(log(metabolome))
-fit <- rodpaa(D1, D2, input = "dissimilarity")
-```
+## Citation
 
-**Shortcut: start from the data matrices.** For Euclidean and Bray-Curtis,
-RoDPAA can compute the dissimilarities for you with `input = "data"`, choosing
-one dissimilarity per view. This runs the same analysis as above:
-
-``` r
-fit <- rodpaa(microbiome, log(metabolome), input = "data",
-              dissimilarity1 = "bray", dissimilarity2 = "euclidean")
-```
-
-RoDPAA uses the data exactly as given. Apply any transformation (for example
-CLR or log) and any filtering before calling `rodpaa()`. Bray-Curtis needs
-nonnegative data, such as counts or relative abundances.
-
-**Kernels (advanced).** If you already have similarity (kernel) matrices, use
-`input = "kernel"`. Kernel matrices must be symmetric. RoDPAA double-centers
-them before the analysis, so they need not be centered beforehand. To turn a
-dissimilarity matrix into a similarity matrix yourself, use
-`dist_to_kernel()`.
-
-## Main options
-
-| Argument | What it does | Default |
-|---|---|---|
-| `input` | `"dissimilarity"`, `"data"` or `"kernel"` | `"dissimilarity"` |
-| `dissimilarity1`, `dissimilarity2` | `"euclidean"` or `"bray"` for each view (data input) | `"euclidean"` |
-| `var_thresh` | proportion of variance kept when choosing each signal rank | `0.80` |
-| `r1`, `r2` | fix the signal ranks instead of choosing them | chosen from the data |
-| `n_perm` | number of permutations | `1000` |
-| `alpha` | significance level (Bonferroni-adjusted) | `0.05` |
-| `k` | fix the shared dimension and skip the test | tested |
-| `k_extract` | extract more directions than are significant, for display | `k_hat` |
-
-See `?rodpaa` for all options and the full output.
+Xu Y, Wang Y. RoDPAA: a robust dissimilarity-based principal angle analysis
+framework for multi-view microbiome data integration. Manuscript in
+preparation.

@@ -59,10 +59,11 @@ and are labeled as such in the scores plot. In the P-value plot, components
 after the first non-significant one are not counted in \eqn{\hat{k}} even
 if their P-value is below the significance level, and are drawn in grey.
 
-An empirical P-value of 0 means that no permutation reached the observed
-value, that is \eqn{P < 1/B} for \eqn{B} permutations. Because 0 cannot be
-shown on a log scale, such P-values are drawn at \eqn{1/B} with a triangle.
-The P-values stored in the fit are not changed.
+The permutation P-value of component \eqn{j} is the proportion of the
+\eqn{B} permutations whose \eqn{j}th shared intensity is at least the
+observed one. Because a P-value of 0 cannot be shown on a log scale, it is
+drawn at \eqn{1/B} with a triangle, for display only. The P-values stored in
+the fit are not changed.
 
 Colors follow the color-blind-safe Okabe-Ito palette. The title and axis
 labels can be replaced with \code{main}, \code{xlab} and \code{ylab}.
@@ -73,8 +74,4 @@ fit <- rodpaa(dist(rodpaa_example$view1), dist(rodpaa_example$view2))
 plot(fit)                                  # shared intensities
 plot(fit, type = "scores")                 # SF1 vs SF2
 plot(fit, type = "pvalue")                 # permutation P-values
-
-# color the scores by a participant-level label
-grp <- ifelse(rodpaa_example$shared[, 1] > 0, "high Z1", "low Z1")
-plot(fit, type = "scores", group = grp)
 }

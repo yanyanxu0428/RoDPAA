@@ -37,6 +37,9 @@ select_signal_rank <- function(H,
     k <- which(cumvar >= var_thresh)[1]
     if (is.na(k)) k <- max_possible
   } else {
+    # Eigenvalues that are zero up to rounding error (for example beyond the
+    # number of features) would otherwise produce a spurious largest drop.
+    ev <- ev[ev > max(ev) * sqrt(.Machine$double.eps)]
     L <- length(ev)
     if (L <= 1L) {
       k <- L

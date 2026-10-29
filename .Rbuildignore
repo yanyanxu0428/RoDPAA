@@ -3,3 +3,5 @@
 ^LICENSE\.md$
 ^dev$
 ^data-raw$
+^doc$
+^Meta$

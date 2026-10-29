@@ -93,3 +93,31 @@ test_that("non-symmetric or non-square kernels are rejected", {
   expect_error(rodpaa(K_bad, K, input = "kernel", verbose = FALSE), "`x1` is not symmetric")
   expect_error(rodpaa(K, K[, 1:9], input = "kernel", verbose = FALSE), "`x2` must be a square")
 })
+
+test_that("the IBDMDB data reproduce the manuscript shared dimensions", {
+  d <- ibdmdb_micro
+  expect_equal(dim(d$ileum), c(68, 99))
+  expect_equal(dim(d$rectum), c(68, 94))
+  expect_identical(rownames(d$ileum), rownames(d$rectum))
+  expect_equal(as.vector(table(d$diagnosis)), c(21, 47))
+  set.seed(1)
+  bc <- rodpaa(d$rectum, d$ileum, input = "data", dissimilarity1 = "bray",
+               dissimilarity2 = "bray", verbose = FALSE)
+  clr <- function(X) { L <- log(X + 1); L - rowMeans(L) }
+  set.seed(1)
+  eu <- rodpaa(clr(d$rectum), clr(d$ileum), input = "data", verbose = FALSE)
+  expect_equal(bc$k_hat, 11)                  # manuscript: Bray-Curtis, filtered
+  expect_equal(eu$k_hat, 19)                  # manuscript: CLR-Euclidean, filtered
+})
+
+test_that("the elbow rule ignores eigenvalues that are zero up to rounding error", {
+  # n > p, so each kernel has many eigenvalues that are numerically zero
+  set.seed(5)
+  sim <- simulate_two_views(n = 100, k = 3, p1 = 20, p2 = 25, sd = 0.3)
+  set.seed(1)
+  fit <- rodpaa(dist(sim$X1), dist(sim$X2), rank_method = "relative_diff",
+                n_perm = 200, verbose = FALSE)
+  expect_equal(fit$dimensions$r1, 3L)
+  expect_equal(fit$dimensions$r2, 3L)
+  expect_equal(fit$k_hat, 3)
+})

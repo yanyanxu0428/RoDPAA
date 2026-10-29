@@ -1,0 +1,356 @@
+---
+title: "Getting started with RoDPAA"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
+    fig_caption: true
+    math_method:
+      engine: mathjax
+      url: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js
+vignette: >
+  %\VignetteIndexEntry{Getting started with RoDPAA}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 5.5,
+  fig.height = 4.2,
+  fig.align = "center",
+  out.width = "80%"
+)
+```
+
+# Overview
+
+Robust Dissimilarity-based Principal Angle Analysis (RoDPAA) identifies
+participant-level variation shared by two data views measured on the same
+participants, such as the gut microbiome and the fecal metabolome of one
+cohort. Each view is represented by a dissimilarity of its own, so that each
+retains a geometry appropriate to its data type, for example Bray-Curtis
+dissimilarity for microbial abundances and Euclidean distance for
+log-transformed metabolite intensities.
+
+For each view, RoDPAA estimates a signal subspace from the dissimilarity
+matrix, measures how closely the two subspaces are aligned, tests by
+permutation how many aligned directions are shared, and returns one score per
+participant for each shared direction. Full details of the method are given in
+the RoDPAA manuscript.
+
+```{r setup}
+library(RoDPAA)
+```
+
+# Example data
+
+The package provides a simulated data set, `rodpaa_example`, with two views
+measured on the same 80 participants, generated as
+$$X_v = F_J W_v + F_{I,v} U_v + E_v, \qquad v = 1, 2,$$
+where $F_J$ contains two shared factors common to both views, $F_{I,v}$ is one
+additional factor of view $v$ that is independent of the other view, and $E_v$
+is noise. The settings are given in `?rodpaa_example`.
+
+```{r}
+str(rodpaa_example, give.attr = FALSE)
+```
+
+The matrices `view1` (80 x 50) and `view2` (80 x 40) contain the data, with
+participants in rows. The matrix `shared` contains the true shared factors $F_J$ and
+is used below to assess the estimates.
+
+# Input types
+
+`rodpaa()` accepts each view in one of three forms, set by the argument
+`input`. The default is `input = "dissimilarity"`.
+
+| `input` | What to supply for each view | When to use it |
+|---|---|---|
+| `"dissimilarity"` (default) | An $n \times n$ dissimilarity matrix or `dist` object | Any data-appropriate dissimilarity, for example Euclidean distance, Bray-Curtis dissimilarity or other dissimilarities suited to the data |
+| `"data"` | An $n \times p$ data matrix, participants in rows | Euclidean distance or Bray-Curtis dissimilarity, computed internally: select `"euclidean"` or `"bray"` for each view. For any other dissimilarity, supply the dissimilarity matrices directly with `input = "dissimilarity"` |
+| `"kernel"` | An $n \times n$ symmetric similarity matrix | Advanced use, when similarity matrices are already available |
+
+In every case, the two views must contain the same participants in the same
+order, and RoDPAA uses the inputs exactly as supplied. Any preprocessing, for
+example a centered log-ratio or logarithmic transformation, should therefore
+be applied beforehand.
+
+# Constructing the dissimilarities
+
+Both example views are continuous, and Euclidean distance is used for each:
+
+```{r}
+D1 <- dist(rodpaa_example$view1)
+D2 <- dist(rodpaa_example$view2)
+```
+
+The two views may use different dissimilarities. For example, for a user's own
+microbial relative abundances (`microbiome`) and metabolite intensities
+(`metabolome`), with participants in rows, a typical choice is
+
+```{r, eval = FALSE}
+D1 <- ecodist::distance(microbiome, method = "bray-curtis")  # Bray-Curtis dissimilarity
+D2 <- dist(log(metabolome))                                  # Euclidean distance on log scale
+```
+
+# Fitting the model
+
+RoDPAA is fitted to the two dissimilarity matrices of the simulated example
+data. The main arguments are written out below with their default values: the
+signal ranks are selected with the variance rule (`rank_method = "variance"`,
+`var_thresh = 0.80`), which is explained in the next section, and the shared
+dimension is selected by the permutation test with 1,000 permutations,
+Bonferroni correction and significance level 0.05. Because the permutation
+test is random, a seed is set for reproducibility.
+
+```{r}
+set.seed(1)
+fit <- rodpaa(D1, D2,
+              input = "dissimilarity",            # dissimilarity matrices
+              rank_method = "variance",           # signal-rank rule
+              var_thresh = 0.80,                  # 80% of the eigenvalue sum
+              n_perm = 1000,                      # number of permutations
+              alpha = 0.05,                       # significance level
+              correction_method = "bonferroni")   # multiple-testing correction
+fit
+```
+
+# Choosing the signal ranks
+
+Each dissimilarity matrix is converted into a centered similarity matrix
+$K_v$ by Gower double-centering. The signal rank $\hat r_v$ is the number of
+leading eigenvectors of $K_v$ that form the signal subspace of view $v$. The shared dimension is tested within
+these subspaces, so the signal ranks should capture the structured variation
+of each view without admitting many noise directions. `rodpaa()` provides
+three options:
+
+| Situation | Setting |
+|---|---|
+| General use, including eigenvalues that decline gradually without a clear gap | `rank_method = "variance"` (default), with threshold `var_thresh` |
+| A few large eigenvalues are clearly separated from the rest | `rank_method = "relative_diff"` (elbow) |
+| The signal ranks are known from the study design or fixed in advance | `r1` and `r2` |
+
+The variance rule keeps the smallest number of eigenvalues that account for
+at least `var_thresh` (by default 80%) of the sum of the positive
+eigenvalues. The elbow rule places the cut at the largest relative drop
+$(\hat\lambda_{v,j} - \hat\lambda_{v,j+1}) / \hat\lambda_{v,j}$ between
+consecutive positive eigenvalues. The eigenvalues are stored in
+`fit$eigenvalues1` and `fit$eigenvalues2`. A scree plot of their square roots
+(for Euclidean distance, the singular values of the centered data matrix)
+shows which situation applies:
+
+```{r}
+scree <- function(eigenvalues, r, main, n_show = 30) {
+  d <- sqrt(pmax(eigenvalues, 0))
+  plot(head(d, n_show), type = "b", pch = 19, cex = 0.7, las = 1,
+       xlab = "Component index", ylab = "", main = main, bty = "l")
+  mtext("Square root of eigenvalue", side = 2, line = 3.3)
+  abline(v = r + 0.5, lty = 2)
+}
+```
+
+```{r scree-example, fig.width = 9, fig.height = 4, out.width = "100%", fig.cap = "Figure 1. Scree plots of the example data: square roots of the leading eigenvalues of the similarity matrices. The dashed line marks the signal rank selected by the variance rule."}
+par(mfrow = c(1, 2), mar = c(4.5, 5, 3, 1))
+scree(fit$eigenvalues1, fit$dimensions$r1, "View 1", n_show = 15)
+scree(fit$eigenvalues2, fit$dimensions$r2, "View 2", n_show = 15)
+```
+
+In the example data, the variance rule retains three eigenvectors per view,
+whose eigenvalues account for
+`r round(100 * sum(fit$eigenvalues1[1:3]) / sum(fit$eigenvalues1))`% and
+`r round(100 * sum(fit$eigenvalues2[1:3]) / sum(fit$eigenvalues2))`% of the
+eigenvalue sums. This agrees with the generating model (two shared factors and
+one additional factor per view). The square roots of the first three
+eigenvalues (the singular values) also stand clearly above the rest
+(Figure 1), so the elbow rule selects the same signal ranks.
+
+# Interpreting the output
+
+**Shared intensities** (`fit$shared_intensities`). These are the cosines of
+the principal angles between the two signal subspaces. They lie between 0 and
+1, and values close to 1 indicate strong alignment. The first two are close
+to 1, indicating strong alignment between the views along these directions.
+The third is close to 0 and reflects view-specific variation.
+
+**Shared dimension** (`fit$k_hat`). The permutation test identified two shared
+directions. The test is summarized by `summary()`:
+
+```{r}
+summary(fit)
+```
+
+The full results are stored in `fit$permutation$table`:
+
+```{r}
+fit$permutation$table
+```
+
+The column `significant` indicates whether the adjusted P-value is below
+`alpha`. The shared dimension $\hat k$ counts the leading significant
+components up to the first non-significant one. A component that is
+significant but follows a non-significant one is therefore not counted in
+$\hat k$. The column *Shared* printed by `summary()` shows which components
+are counted.
+
+**Shared factors** (`fit$shared_factors`). An $n \times \hat k$ matrix with one
+row per participant and one column per shared direction:
+
+```{r}
+head(round(fit$shared_factors, 3))
+```
+
+Because the true shared factors are known in this example, the estimates can
+be assessed directly by comparing the subspace spanned by the estimated shared
+factors with the subspace spanned by the true shared factors $F_J$. The
+function `subspace()` of the **pracma** package returns the largest principal
+angle between two subspaces, in radians, where 0 means that the subspaces
+coincide:
+
+```{r, eval = requireNamespace("pracma", quietly = TRUE)}
+angle <- pracma::subspace(fit$shared_factors, rodpaa_example$shared)
+round(angle, 3)                  # radians
+round(angle * 180 / pi, 1)       # degrees
+```
+
+The angle is small, so RoDPAA recovers the true shared subspace.
+
+The fitted object is a list. Its components are listed by `names()`:
+
+```{r}
+names(fit)
+```
+
+The main components are:
+
+| Component | Description |
+|---|---|
+| `shared_factors` | An $n \times \hat{k}$ matrix of participant-level shared factors, obtained by averaging the paired shared directions of view 1 and view 2 |
+| `k_hat` | Estimated shared dimension |
+| `shared_intensities` | Shared intensities (cosines of the principal angles) |
+| `O_J1`, `O_J2` | Paired shared directions of view 1 and view 2 |
+| `O_I1`, `O_I2` | View-specific directions |
+| `eigenvalues1`, `eigenvalues2` | Eigenvalues of the two similarity matrices |
+| `dimensions` | Shared dimension (`k_hat`), number of extracted directions (`k_extracted`) and signal ranks (`r1`, `r2`) |
+| `permutation$table` | Shared intensity, P-value, adjusted P-value and significance of each component |
+
+# Visualizing the results
+
+```{r intensity, fig.cap = "Figure 2. Shared intensities. Filled points are components counted in the shared dimension; the grey band is the central 95% of the permutation null distribution."}
+plot(fit)
+```
+
+In Figure 2, the first two components lie well above the permutation null
+distribution, whereas the third lies within it.
+
+```{r pvalue, fig.cap = "Figure 3. Bonferroni-adjusted permutation P-values on the negative log10 scale. The dashed line marks the significance level. Triangles mark P-values of 0, drawn at 1/B."}
+plot(fit, type = "pvalue")
+```
+
+```{r scores, fig.cap = "Figure 4. Participant scores on the first two shared factors."}
+plot(fit, type = "scores")
+```
+
+The shared factors can be used in downstream analyses, for example as
+predictors in regression models of clinical outcomes, or as input to
+clustering.
+
+# Alternative input formats
+
+**Data matrices.** With `input = "data"`, RoDPAA computes the dissimilarities
+from the data matrices, with one dissimilarity specified per view. The result
+is identical to that obtained above:
+
+```{r}
+set.seed(1)
+fit_data <- rodpaa(rodpaa_example$view1, rodpaa_example$view2,
+                   input = "data",
+                   dissimilarity1 = "euclidean", dissimilarity2 = "euclidean",
+                   verbose = FALSE)
+all.equal(fit$shared_factors, fit_data$shared_factors)
+```
+
+**Similarity (kernel) matrices.** With `input = "kernel"`, the matrices must be
+symmetric. They are double-centered internally, so prior centering is not
+required, and they need not be positive semidefinite because only
+eigenvectors with positive eigenvalues are used. The function
+`dist_to_kernel()` converts a dissimilarity matrix into such a matrix:
+
+```{r}
+K1 <- dist_to_kernel(D1)
+K2 <- dist_to_kernel(D2)
+set.seed(1)
+fit_kernel <- rodpaa(K1, K2, input = "kernel", verbose = FALSE)
+all.equal(fit$shared_factors, fit_kernel$shared_factors)
+```
+
+# Exploratory directions
+
+The argument `k_extract` sets the number of directions to extract, which may
+exceed $\hat k$, for example to inspect further directions visually.
+Directions beyond $\hat k$ are **exploratory**: they are not supported by the
+permutation test, and the test result remains reported in `k_hat`. Here, a
+third direction is extracted from the example data:
+
+```{r}
+set.seed(1)
+fit3 <- rodpaa(D1, D2, k_extract = 3, verbose = FALSE)
+fit3$dimensions[c("k_hat", "k_extracted")]
+```
+
+The third column of `fit3$shared_factors` is exploratory. The columns are
+named `SF1`, `SF2`, ... in either case, so compare `k_extracted` with `k_hat`
+before interpreting them.
+
+# Application: ileal and rectal microbiome in the IBDMDB cohort
+
+The data set `ibdmdb_micro` contains genus-level 16S rRNA gene counts from
+paired ileal and rectal biopsies of 68 participants of the Inflammatory Bowel
+Disease Multi'omics Database (IBDMDB; Lloyd-Price et al., 2019). The two biopsy
+sites are treated as two views of the same participants.
+
+```{r}
+str(ibdmdb_micro[c("rectum", "ileum")], give.attr = FALSE)
+```
+
+Two representations of the microbiome profiles are used:
+
+* **Bray-Curtis dissimilarity** on the counts.
+* **Euclidean distance after the centered log-ratio (CLR) transformation**,
+  with a pseudocount of 1:
+  $\mathrm{CLR}(x)_g = \log(x_g + 1) - \frac{1}{p}\sum_{m=1}^{p} \log(x_m + 1)$.
+
+The rectum is used as view 1 and the ileum as view 2. The signal ranks are
+selected with the default variance rule.
+
+```{r}
+d <- ibdmdb_micro
+
+# Bray-Curtis on the counts
+set.seed(1)
+fit_bc <- rodpaa(d$rectum, d$ileum, input = "data",
+                 dissimilarity1 = "bray", dissimilarity2 = "bray")
+fit_bc
+
+# CLR transformation, then Euclidean distance
+clr <- function(X) {
+  L <- log(X + 1)
+  L - rowMeans(L)
+}
+set.seed(1)
+fit_eu <- rodpaa(clr(d$rectum), clr(d$ileum), input = "data",
+                 dissimilarity1 = "euclidean", dissimilarity2 = "euclidean")
+fit_eu
+```
+
+Both representations identify shared structure between the two sites:
+`r fit_bc$k_hat` shared directions under Bray-Curtis dissimilarity and
+`r fit_eu$k_hat` under CLR-Euclidean distance.
+
+```{r ibdmdb-intensity, fig.width = 9, fig.height = 4, out.width = "100%", fig.cap = "Figure 5. Shared intensities of the IBDMDB ileal and rectal microbiome under Bray-Curtis dissimilarity (left) and CLR-Euclidean distance (right)."}
+par(mfrow = c(1, 2))
+plot(fit_bc, main = "Bray-Curtis")
+plot(fit_eu, main = "CLR-Euclidean")
+```

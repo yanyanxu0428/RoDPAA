@@ -9,7 +9,7 @@ Authors@R: c(
 Description: Unsupervised integration of two high-dimensional data views
     measured on the same participants. Each view is represented by a
     user-chosen dissimilarity (for example Bray-Curtis or Euclidean),
-    converted to a centred similarity matrix, and summarised by its
+    converted to a centered similarity matrix, and summarized by its
     leading eigenvectors. Principal angles between the two signal
     subspaces quantify cross-view alignment, a permutation test that
     breaks participant correspondence estimates how many directions are
@@ -27,6 +27,9 @@ Imports:
     stats,
     utils
 Suggests:
+    knitr,
+    pracma,
+    rmarkdown,
     testthat (>= 3.0.0),
     vegan
 Config/roxygen2/version: 8.1.0
@@ -34,3 +37,4 @@ Config/testthat/edition: 3
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
+VignetteBuilder: knitr

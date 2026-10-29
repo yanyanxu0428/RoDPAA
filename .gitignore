@@ -5,3 +5,7 @@
 .DS_Store
 .quarto
 dev/
+inst/doc
+/doc/
+/Meta/
+data-raw/ibdmdb_micro.R
